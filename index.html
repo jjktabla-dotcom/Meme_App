@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Caption This — AI Meme Caption Generator</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>😂</text></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0A0A10;
+    --panel:rgba(255,255,255,0.035);
+    --panel-border:rgba(255,255,255,0.09);
+    --panel-strong:rgba(255,255,255,0.055);
+    --text:#F2F1F6;
+    --muted:#96949F;
+    --faint:#5B5964;
+    --accent-a:#7B5CFF;
+    --accent-b:#4C8CFF;
+    --pill:rgba(255,255,255,0.06);
+    --pill-border:rgba(255,255,255,0.1);
+    --good:#35D584;
+    --bad:#FF7A90;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Inter', system-ui, -apple-system, sans-serif;
+    min-height:100vh;
+    line-height:1.5;
+    position:relative;
+    overflow-x:hidden;
+  }
+
+  /* ---- background decoration: faint arcs + glow blobs ---- */
+  .bg-decor{position:fixed; inset:0; z-index:0; pointer-events:none; overflow:hidden;}
+  .glow{position:absolute; border-radius:50%; filter:blur(90px); opacity:0.35;}
+  .glow.a{width:420px; height:420px; background:#6D5DFC; top:-160px; left:-120px;}
+  .glow.b{width:380px; height:380px; background:#2E86FF; bottom:-180px; right:-140px; opacity:0.25;}
+  .arc{position:absolute; border:1px solid rgba(255,255,255,0.08); border-radius:50%;}
+  .arc.one{width:900px; height:900px; top:-500px; left:-300px;}
+  .arc.two{width:600px; height:600px; bottom:-400px; right:-250px;}
+
+  .wrap{position:relative; z-index:1; max-width:720px; margin:0 auto; padding:28px 18px 70px;}
+
+  header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    margin-bottom:22px;
+  }
+  .brand{display:flex; align-items:center; gap:10px;}
+  .brand-mark{
+    width:34px; height:34px; border-radius:50%;
+    background:linear-gradient(135deg, var(--accent-a), var(--accent-b));
+    display:flex; align-items:center; justify-content:center;
+    font-size:16px; flex-shrink:0;
+  }
+  .brand-name{font-weight:700; font-size:16px; letter-spacing:-0.2px;}
+  .brand-sub{font-size:12px; color:var(--muted); margin-top:1px;}
+
+  .icon-pill{
+    width:38px; height:38px; border-radius:50%;
+    background:var(--pill); border:1px solid var(--pill-border);
+    display:flex; align-items:center; justify-content:center;
+    font-size:15px; cursor:pointer; color:var(--text);
+  }
+  .icon-pill:hover{background:var(--panel-strong);}
+
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--panel-border);
+    border-radius:22px;
+    padding:20px;
+    margin-bottom:16px;
+    backdrop-filter:blur(14px);
+  }
+
+  /* settings / own-key panel */
+  .settings-panel{display:none;}
+  .settings-panel.open{display:block;}
+  .settings-panel h3{margin:0 0 4px; font-size:14px;}
+  .settings-panel p.hint{margin:0 0 14px; font-size:12.5px; color:var(--muted);}
+  .settings-panel label{display:block; font-size:12.5px; color:var(--muted); margin-bottom:6px;}
+  .settings-panel input[type="password"]{
+    width:100%; padding:11px 13px; border-radius:12px;
+    background:rgba(255,255,255,0.05); border:1px solid var(--panel-border);
+    color:var(--text); font-family:inherit; font-size:13.5px;
+  }
+  .settings-panel input::placeholder{color:var(--faint);}
+  .settings-row{display:flex; align-items:center; gap:8px; margin-top:10px; font-size:12.5px; color:var(--muted);}
+  .settings-help{font-size:12px; color:var(--faint); margin-top:12px; padding-top:12px; border-top:1px solid var(--panel-border); line-height:1.6;}
+  .settings-help a{color:#9DB4FF;}
+  .key-status{font-size:12px; margin-top:8px; font-weight:600;}
+  .key-status.ok{color:var(--good);}
+  .key-status.neutral{color:var(--muted); font-weight:500;}
+
+  /* mode pill nav, styled like the dashboard's top nav tabs */
+  .mode-toggle{
+    display:inline-flex; gap:4px; padding:4px;
+    background:var(--pill); border:1px solid var(--pill-border);
+    border-radius:999px; margin-bottom:18px;
+  }
+  .mode-toggle button{
+    border:none; background:transparent; color:var(--muted);
+    padding:9px 16px; border-radius:999px; font-family:inherit;
+    font-weight:600; font-size:13.5px; cursor:pointer;
+  }
+  .mode-toggle button.active{background:var(--panel-strong); color:var(--text); box-shadow:0 0 0 1px var(--panel-border) inset;}
+
+  .field-label{font-size:12.5px; color:var(--muted); margin:0 0 8px;}
+
+  .upload-zone{
+    border:1px dashed var(--panel-border);
+    border-radius:16px;
+    padding:30px 16px;
+    text-align:center;
+    cursor:pointer;
+    background:rgba(255,255,255,0.02);
+    position:relative;
+  }
+  .upload-zone.dragover{background:rgba(124,92,255,0.08); border-color:var(--accent-a);}
+  .upload-zone input[type="file"]{position:absolute; inset:0; opacity:0; cursor:pointer;}
+  .upload-zone .big{font-size:28px; margin-bottom:6px;}
+  .upload-zone p{margin:0; font-size:13.5px; color:var(--muted);}
+  .upload-zone p strong{color:var(--text);}
+
+  #previewWrap{display:none; margin-top:14px; text-align:center;}
+  #previewWrap.show{display:block;}
+  #previewImg{max-width:100%; max-height:260px; border-radius:14px; border:1px solid var(--panel-border);}
+  #clearImgBtn{display:block; margin:10px auto 0; background:none; border:none; color:var(--bad); font-weight:600; font-size:12.5px; cursor:pointer;}
+
+  textarea{
+    width:100%; min-height:100px; padding:14px;
+    border-radius:16px; border:1px solid var(--panel-border);
+    background:rgba(255,255,255,0.03); color:var(--text);
+    font-family:inherit; font-size:14px; resize:vertical;
+  }
+  textarea::placeholder{color:var(--faint);}
+
+  .options-row{display:flex; gap:10px; margin-top:14px; flex-wrap:wrap;}
+  .field{flex:1; min-width:140px;}
+  .field label{display:block; font-size:12px; color:var(--muted); margin-bottom:6px;}
+  .field select{
+    width:100%; padding:10px 12px; border-radius:12px;
+    background:rgba(255,255,255,0.05); border:1px solid var(--panel-border);
+    color:var(--text); font-family:inherit; font-size:13px;
+  }
+  .field select option{background:#17161F; color:var(--text);}
+
+  .generate-btn{
+    width:100%; margin-top:18px; padding:14px;
+    border:none; border-radius:999px; cursor:pointer;
+    background:linear-gradient(135deg, var(--accent-a), var(--accent-b));
+    color:#fff; font-family:inherit; font-weight:700; font-size:14.5px;
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    box-shadow:0 10px 30px -10px rgba(124,92,255,0.6);
+  }
+  .generate-btn:disabled{opacity:0.5; cursor:not-allowed; box-shadow:none;}
+
+  #statusMsg{margin-top:12px; font-size:13.5px; font-weight:600; text-align:center; min-height:18px;}
+  #statusMsg.error{color:var(--bad);}
+  #statusMsg.loading{color:#9DB4FF;}
+
+  /* empty state orb illustration, echoing the reference's gradient-sphere cluster */
+  .empty-state{text-align:center; padding:26px 10px 10px;}
+  .orb-cluster{position:relative; width:150px; height:120px; margin:0 auto 14px;}
+  .orb{position:absolute; border-radius:50%;}
+  .orb.o1{width:66px; height:66px; left:40px; top:18px; background:radial-gradient(circle at 32% 30%, #FFC24D, #FF6B3D);}
+  .orb.o2{width:40px; height:40px; left:86px; top:4px; background:radial-gradient(circle at 32% 30%, #FF8AD4, #D23DFF);}
+  .orb.o3{width:46px; height:46px; left:70px; top:52px; background:radial-gradient(circle at 32% 30%, #5CD9FF, #3D6CFF);}
+  .orb.o4{width:14px; height:14px; left:18px; top:40px; background:#fff; opacity:0.5;}
+  .orb.o5{width:9px; height:9px; left:132px; top:70px; background:#fff; opacity:0.4;}
+  .empty-state p{margin:0; font-size:13.5px; color:var(--muted);}
+
+  #results{display:grid; grid-template-columns:1fr; gap:10px;}
+  .caption-card{
+    background:var(--panel);
+    border:1px solid var(--panel-border);
+    border-radius:18px;
+    padding:15px 16px;
+    display:flex; justify-content:space-between; align-items:center; gap:12px;
+  }
+  .caption-card p{margin:0; font-size:14.5px; font-weight:500; line-height:1.4; color:var(--text);}
+  .copy-btn{
+    flex-shrink:0; border:1px solid var(--pill-border); background:var(--pill);
+    color:var(--text); border-radius:999px; padding:8px 14px;
+    font-family:inherit; font-weight:600; font-size:12.5px; cursor:pointer;
+  }
+  .copy-btn.copied{background:rgba(53,213,132,0.18); border-color:var(--good); color:var(--good);}
+
+  footer{text-align:center; font-size:12px; color:var(--faint); margin-top:30px;}
+
+  @media (max-width:480px){
+    .glow, .arc{display:none;}
+  }
+</style>
+</head>
+<body>
+
+<div class="bg-decor">
+  <div class="glow a"></div>
+  <div class="glow b"></div>
+  <div class="arc one"></div>
+  <div class="arc two"></div>
+</div>
+
+<div class="wrap">
+
+  <header>
+    <div class="brand">
+      <div class="brand-mark">✦</div>
+      <div>
+        <div class="brand-name">Caption This</div>
+        <div class="brand-sub">AI meme captions, instantly</div>
+      </div>
+    </div>
+    <button class="icon-pill" id="settingsToggle" title="Settings" aria-label="Settings">⚙︎</button>
+  </header>
+
+  <div class="panel settings-panel" id="settingsPanel">
+    <h3>Use your own Gemini key</h3>
+    <p class="hint">This app normally works with no setup. This is only a fallback for hosts that can't run a backend (like a plain GitHub Pages deploy), or for testing locally.</p>
+    <label for="apiKeyInput">Gemini API key</label>
+    <input type="password" id="apiKeyInput" placeholder="Paste a free key from Google AI Studio" autocomplete="off" />
+    <div class="settings-row">
+      <input type="checkbox" id="rememberKey" />
+      <label for="rememberKey" style="margin:0;">Remember on this device</label>
+    </div>
+    <div class="settings-row">
+      <label for="modelSelect" style="margin:0;">Model:</label>
+      <select id="modelSelect" style="background:rgba(255,255,255,0.05); color:var(--text); border:1px solid var(--panel-border); border-radius:8px; padding:6px 8px; font-family:inherit; font-size:12.5px;">
+        <option value="gemini-3.1-flash-lite" selected>gemini-3.1-flash-lite</option>
+        <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+      </select>
+    </div>
+    <div class="key-status neutral" id="keyStatus">No personal key set — the app will use the built-in backend.</div>
+    <div class="settings-help">
+      Free key, no credit card: <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a>.
+      A key you paste here stays in your own browser and is sent straight to Google — never through any server of ours.
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="mode-toggle">
+      <button id="modeUploadBtn" class="active" type="button">📷 Upload image</button>
+      <button id="modeDescribeBtn" type="button">✍️ Describe it</button>
+    </div>
+
+    <div id="uploadSection">
+      <div class="upload-zone" id="uploadZone">
+        <div class="big">🖼️</div>
+        <p><strong>Click to upload</strong> or drag an image here</p>
+        <p>JPG or PNG, up to 4MB</p>
+        <input type="file" id="fileInput" accept="image/png, image/jpeg, image/webp" />
+      </div>
+      <div id="previewWrap">
+        <img id="previewImg" alt="Uploaded image preview" />
+        <button id="clearImgBtn" type="button">Remove image</button>
+      </div>
+    </div>
+
+    <div id="describeSection" style="display:none;">
+      <p class="field-label">Describe the scene</p>
+      <textarea id="describeInput" placeholder="e.g. 'A cat staring judgmentally at an empty food bowl at 3am'"></textarea>
+    </div>
+
+    <div class="options-row">
+      <div class="field">
+        <label for="toneSelect">Tone</label>
+        <select id="toneSelect">
+          <option value="witty and relatable">Witty &amp; relatable</option>
+          <option value="sarcastic">Sarcastic</option>
+          <option value="wholesome">Wholesome</option>
+          <option value="absurd and surreal">Absurd</option>
+          <option value="dry deadpan">Dry / deadpan</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="countSelect">Captions</label>
+        <select id="countSelect">
+          <option value="3">3</option>
+          <option value="4" selected>4</option>
+          <option value="6">6</option>
+        </select>
+      </div>
+    </div>
+
+    <button class="generate-btn" id="generateBtn" type="button">✦ Generate captions</button>
+    <div id="statusMsg"></div>
+  </div>
+
+  <div class="panel" id="resultsPanel">
+    <div class="empty-state" id="emptyState">
+      <div class="orb-cluster">
+        <div class="orb o1"></div><div class="orb o2"></div><div class="orb o3"></div>
+        <div class="orb o4"></div><div class="orb o5"></div>
+      </div>
+      <p>Your captions will show up here.</p>
+    </div>
+    <div id="results"></div>
+  </div>
+
+  <footer>Built for a web dev capstone · powered by the Gemini API</footer>
+</div>
+
+<script>
+(function(){
+  const $ = (id) => document.getElementById(id);
+
+  const settingsToggle = $('settingsToggle');
+  const settingsPanel = $('settingsPanel');
+  const apiKeyInput = $('apiKeyInput');
+  const rememberKey = $('rememberKey');
+  const keyStatus = $('keyStatus');
+  const modelSelect = $('modelSelect');
+
+  const modeUploadBtn = $('modeUploadBtn');
+  const modeDescribeBtn = $('modeDescribeBtn');
+  const uploadSection = $('uploadSection');
+  const describeSection = $('describeSection');
+  const uploadZone = $('uploadZone');
+  const fileInput = $('fileInput');
+  const previewWrap = $('previewWrap');
+  const previewImg = $('previewImg');
+  const clearImgBtn = $('clearImgBtn');
+  const describeInput = $('describeInput');
+
+  const toneSelect = $('toneSelect');
+  const countSelect = $('countSelect');
+  const generateBtn = $('generateBtn');
+  const statusMsg = $('statusMsg');
+  const results = $('results');
+  const emptyState = $('emptyState');
+
+  const STORAGE_KEY = 'captionThis_geminiKey';
+  const STORAGE_MODEL = 'captionThis_model';
+
+  let mode = 'upload';
+  let imageBase64 = null;
+  let imageMimeType = null;
+
+  // ---------- Own-key fallback panel ----------
+
+  function refreshKeyStatus(){
+    const hasKey = apiKeyInput.value.trim().length > 0;
+    keyStatus.textContent = hasKey
+      ? 'Using your personal key for this session.'
+      : 'No personal key set — the app will use the built-in backend.';
+    keyStatus.className = 'key-status ' + (hasKey ? 'ok' : 'neutral');
+  }
+
+  (function loadSavedKey(){
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) { apiKeyInput.value = saved; rememberKey.checked = true; }
+    const savedModel = localStorage.getItem(STORAGE_MODEL);
+    if (savedModel) modelSelect.value = savedModel;
+    refreshKeyStatus();
+  })();
+
+  settingsToggle.addEventListener('click', () => settingsPanel.classList.toggle('open'));
+  apiKeyInput.addEventListener('input', () => {
+    refreshKeyStatus();
+    if (rememberKey.checked) localStorage.setItem(STORAGE_KEY, apiKeyInput.value.trim());
+  });
+  rememberKey.addEventListener('change', () => {
+    if (rememberKey.checked) localStorage.setItem(STORAGE_KEY, apiKeyInput.value.trim());
+    else localStorage.removeItem(STORAGE_KEY);
+  });
+  modelSelect.addEventListener('change', () => localStorage.setItem(STORAGE_MODEL, modelSelect.value));
+
+  // ---------- Mode toggle ----------
+
+  function setMode(next){
+    mode = next;
+    const isUpload = mode === 'upload';
+    modeUploadBtn.classList.toggle('active', isUpload);
+    modeDescribeBtn.classList.toggle('active', !isUpload);
+    uploadSection.style.display = isUpload ? 'block' : 'none';
+    describeSection.style.display = isUpload ? 'none' : 'block';
+  }
+  modeUploadBtn.addEventListener('click', () => setMode('upload'));
+  modeDescribeBtn.addEventListener('click', () => setMode('describe'));
+
+  // ---------- Image upload ----------
+
+  function handleFile(file){
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { showStatus('Please choose an image file.', 'error'); return; }
+    if (file.size > 4 * 1024 * 1024) { showStatus('Image is too large — use one under 4MB.', 'error'); return; }
+    imageMimeType = file.type;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target.result;
+      imageBase64 = dataUrl.split(',')[1];
+      previewImg.src = dataUrl;
+      previewWrap.classList.add('show');
+      uploadZone.style.display = 'none';
+      clearStatus();
+    };
+    reader.onerror = () => showStatus('Could not read that file — try another image.', 'error');
+    reader.readAsDataURL(file);
+  }
+
+  fileInput.addEventListener('change', (e) => handleFile(e.target.files[0]));
+  uploadZone.addEventListener('dragover', (e) => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+  uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+  uploadZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    uploadZone.classList.remove('dragover');
+    handleFile(e.dataTransfer.files[0]);
+  });
+  clearImgBtn.addEventListener('click', () => {
+    imageBase64 = null; imageMimeType = null; fileInput.value = '';
+    previewImg.src = ''; previewWrap.classList.remove('show'); uploadZone.style.display = 'block';
+  });
+
+  // ---------- Status helpers ----------
+
+  function showStatus(text, kind){ statusMsg.textContent = text; statusMsg.className = kind || ''; }
+  function clearStatus(){ statusMsg.textContent = ''; statusMsg.className = ''; }
+
+  // ---------- Caption generation ----------
+
+  function buildPrompt(tone, count){
+    return [
+      `You are a witty meme caption writer. Look at the image (or the scene described) and write ${count}`,
+      `distinct, short, funny meme captions in a ${tone} tone. Each caption should be punchy (under 16 words),`,
+      `stand on its own, and actually fit what's happening in the image/scene — no generic jokes.`,
+      `Respond with ONLY a raw JSON array of ${count} strings, nothing else. No markdown, no code fences,`,
+      `no numbering, no explanation — just the JSON array, e.g. ["caption one", "caption two"].`
+    ].join(' ');
+  }
+
+  function buildParts(tone, count){
+    const prompt = buildPrompt(tone, count);
+    const parts = [{ text: prompt }];
+    if (mode === 'upload') {
+      parts.push({ inline_data: { mime_type: imageMimeType, data: imageBase64 } });
+    } else {
+      parts.push({ text: `Scene description: ${describeInput.value.trim()}` });
+    }
+    return parts;
+  }
+
+  function parseCaptions(rawText, expectedCount){
+    let cleaned = rawText.trim().replace(/```json|```/g, '').trim();
+    const start = cleaned.indexOf('[');
+    const end = cleaned.lastIndexOf(']');
+    if (start !== -1 && end !== -1 && end > start) {
+      cleaned = cleaned.slice(start, end + 1);
+      try {
+        const arr = JSON.parse(cleaned);
+        if (Array.isArray(arr) && arr.length) return arr.map(String);
+      } catch (e) { /* fall through */ }
+    }
+    return rawText
+      .split('\n')
+      .map(l => l.replace(/^[\s\-\*\d\.\)]+/, '').replace(/^["']|["']$/g, '').trim())
+      .filter(Boolean)
+      .slice(0, expectedCount);
+  }
+
+  function friendlyError(err){
+    const msg = String((err && err.message) || err);
+    if (/API key not valid|API_KEY_INVALID/i.test(msg)) return 'That API key was rejected — double-check it in Settings.';
+    if (/quota|rate limit|RESOURCE_EXHAUSTED|Too many requests/i.test(msg)) return "Rate limit hit — wait a bit and try again.";
+    if (/Failed to fetch|NetworkError/i.test(msg)) return 'Network error — check your connection and try again.';
+    if (/missing GEMINI_API_KEY/i.test(msg)) return "This deployment's backend isn't configured yet — add your own key in Settings to keep testing.";
+    return msg;
+  }
+
+  // Calls Google directly using a key the visitor pasted in.
+  async function callGeminiDirect(apiKey, model, parts){
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ role: 'user', parts }], generationConfig: { temperature: 1, maxOutputTokens: 512 } })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error((data && data.error && data.error.message) || `Request failed (${response.status}).`);
+    return data;
+  }
+
+  // Calls our own serverless function, which holds the key server-side.
+  async function callBackend(model, parts){
+    const response = await fetch('/api/generate-captions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, parts })
+    });
+    if (response.status === 404) throw new Error('NO_BACKEND');
+    const data = await response.json();
+    if (!response.ok) throw new Error((data && data.error && data.error.message) || `Request failed (${response.status}).`);
+    return data;
+  }
+
+  function extractText(data){
+    const candidate = data.candidates && data.candidates[0];
+    return candidate && candidate.content && candidate.content.parts
+      ? candidate.content.parts.map(p => p.text || '').join('\n')
+      : '';
+  }
+
+  async function generateCaptions(){
+    if (mode === 'upload' && !imageBase64) { showStatus('Upload an image first, or switch to "Describe it".', 'error'); return; }
+    if (mode === 'describe' && !describeInput.value.trim()) { showStatus('Describe the scene first.', 'error'); return; }
+
+    const tone = toneSelect.value;
+    const count = countSelect.value;
+    const model = modelSelect.value;
+    const parts = buildParts(tone, count);
+    const personalKey = apiKeyInput.value.trim();
+
+    generateBtn.disabled = true;
+    showStatus('Thinking of something funny…', 'loading');
+    emptyState.style.display = 'none';
+    results.innerHTML = '';
+
+    try {
+      let data;
+      if (personalKey) {
+        data = await callGeminiDirect(personalKey, model, parts);
+      } else {
+        try {
+          data = await callBackend(model, parts);
+        } catch (err) {
+          if (err.message === 'NO_BACKEND') {
+            settingsPanel.classList.add('open');
+            throw new Error("This deployment doesn't have a backend set up — paste your own free key above to continue.");
+          }
+          throw err;
+        }
+      }
+
+      const textPart = extractText(data);
+      if (!textPart) throw new Error('The model returned an empty response — try again.');
+
+      const captions = parseCaptions(textPart, Number(count));
+      if (!captions.length) throw new Error("Couldn't parse any captions from the response — try again.");
+
+      renderCaptions(captions);
+      clearStatus();
+    } catch (err) {
+      console.error(err);
+      showStatus(friendlyError(err), 'error');
+      if (!results.children.length) emptyState.style.display = 'block';
+    } finally {
+      generateBtn.disabled = false;
+    }
+  }
+
+  function renderCaptions(captions){
+    results.innerHTML = '';
+    captions.forEach((caption) => {
+      const card = document.createElement('div');
+      card.className = 'caption-card';
+
+      const p = document.createElement('p');
+      p.textContent = caption;
+
+      const btn = document.createElement('button');
+      btn.className = 'copy-btn';
+      btn.type = 'button';
+      btn.textContent = 'Copy';
+      btn.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(caption);
+          btn.textContent = 'Copied!';
+          btn.classList.add('copied');
+          setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1500);
+        } catch (e) {
+          btn.textContent = 'Select & copy manually';
+        }
+      });
+
+      card.appendChild(p);
+      card.appendChild(btn);
+      results.appendChild(card);
+    });
+  }
+
+  generateBtn.addEventListener('click', generateCaptions);
+})();
+</script>
+</body>
+</html>
